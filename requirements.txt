@@ -1,0 +1,5 @@
+allennlp-models==1.2.0rc1
+comet_ml
+simple_gpu_scheduler
+unidecode
+pandas

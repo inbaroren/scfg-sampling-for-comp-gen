@@ -1,0 +1,4 @@
+genienlp
+torch==1.6
+pandas
+unidecode
