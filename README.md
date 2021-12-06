@@ -13,7 +13,7 @@ The script performs 2 main operations:
 2. Sample with UAT 
 
 The synthetic data, evaluation development and test sets are passed as paths.
-Use python scripts/create_splits.py -h for more details. 
+Use  ```python scripts/create_splits.py -h  ``` for more details. 
  For example, to create UAT samples w.r.t the evaluation data in the data directory (program_dev.tsv and program_test.tsv), run:
  ```
 python scripts/create_splits.py --augmented_path <path to your augmented.tsv file>   --training_size <choose training size for each sample>  --save_uat_samples
