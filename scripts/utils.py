@@ -284,6 +284,8 @@ def validate_split(test_templates, train_templates, debug=True):
 
 
 def remove_examples_by_program(df, condition_string, prog_col=2):
+    if df.empty:
+        return df
     condition_string = f" {condition_string.strip()} "
     orig_size = df.shape[0]
     df = df[~df[prog_col].apply(lambda x: condition_string in x)]
@@ -292,7 +294,7 @@ def remove_examples_by_program(df, condition_string, prog_col=2):
 
 
 def validate_and_fix(test_df, train_templates, test_name, train_name, prog_col=2, debug=True):
-    if debug: print(f"\n\nValidate and fix test: {test_name}, train: {train_name}")
+    if debug: print(f"\n\nValidate and fix evaluation set: {test_name}, train set: {train_name}")
     valid, rmv_props, rmv_consts = validate_split(test_df[prog_col], train_templates, debug=debug)
     for prop in rmv_props.union(rmv_consts):
         test_df = remove_examples_by_program(test_df, prop, prog_col=prog_col)
