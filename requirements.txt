@@ -3,3 +3,4 @@ comet_ml
 simple_gpu_scheduler
 unidecode
 pandas
+editdistance

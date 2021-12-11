@@ -2,13 +2,21 @@ import pandas as pd
 from sklearn.model_selection import train_test_split
 from pathlib import Path
 import editdistance
-import json
-from collections import defaultdict, namedtuple
+from collections import defaultdict
 import random
 import heapq
-from scripts.utils import validate_and_fix
 from tqdm import tqdm
 import pickle
+import argparse
+
+import logging
+import sys
+import os
+sys.path.insert(0, os.path.dirname(__file__))
+from utils import *
+
+
+logger = logging.getLogger(__file__)
 
 
 def creat_split_baseline(cs_df,
@@ -114,9 +122,16 @@ def create_prog_split_skew_templates_freq(train_pull,
                                           with_paraphrase: bool = False):
     """
     UAT sampling
-    domain_train_pull - dataframe with the data for training
-    validation_set_prop - proportion of dev set from each training size
-    training_size - number of training examples for each experiment
+    train_pull: pd.DataFrame, pull of examples to sample from
+    exp_list: float in [-1, 0]. the exponent (alpha) to use to skew the template distribution before sampling. -1 is closest to uniform, 0 is random
+    training_size_list: List[int], list of sample sizes to sample
+    validation_set_prop: float, proportion of the validation set
+    temp_col: string, name of the template column in train_pull
+    input_col: int, index of the question column in train_pull
+    prog_col: int, index of the queries column in train_pull
+    num_splits: int, how many training sets to sample from each size in training_size_list and each alpha in exp_list
+    save_space: boolean, if true returns only examples that were sampled at least once
+    with_paraphrase: boolean, indicates whether the input data includes paraphrased questions
     """
     # calculate frequncy of templates p(T=t), attach to all examples
     N = train_pull.shape[0]
@@ -136,7 +151,7 @@ def create_prog_split_skew_templates_freq(train_pull,
                 tmp_train, tmp_dev = train_test_split(sample, test_size=validation_set_prop)
                 # validate
                 tmp_dev = validate_and_fix(tmp_dev, tmp_train[prog_col],
-                                           f"dev exp-{exp} s-{training_size} i-{i}", f"train",
+                                           f"dev alpha-{exp} training_size-{training_size} split number-{i}", f"train",
                                            prog_col=prog_col, debug=True)
                 # merge
                 tmp_train = tmp_train.assign(**{split_name: 1})
@@ -144,9 +159,13 @@ def create_prog_split_skew_templates_freq(train_pull,
                 tmp = pd.concat([tmp_train, tmp_dev], axis=0)
                 train_pull = train_pull.merge(tmp[[split_name]], left_index=True, right_index=True, how='left')
 
-                assert train_pull[split_name].value_counts()[1] == tmp_train.shape[0]
-                assert train_pull[split_name].value_counts()[2] == tmp_dev.shape[0]
-                assert train_pull.shape[0] == N
+                try:
+                    assert len(train_pull[split_name].value_counts()) == 2, "there are no examples in dev, try to increase the training size"
+                    assert train_pull[split_name].value_counts()[1] == tmp_train.shape[0]
+                    assert train_pull[split_name].value_counts()[2] == tmp_dev.shape[0]
+                    assert train_pull.shape[0] == N
+                except KeyError:
+                    print("there are no examples in dev, try to increase the training size\n", train_pull[split_name].value_counts())
 
     def is_chosen(x):
         for s in training_size_list:
@@ -179,10 +198,10 @@ def create_prog_split_skew_templates_freq_double_phase(domain_train_pull,
 
     while len(training_examples) < training_size:
         tmp = domain_train_pull[~domain_train_pull.index.isin(training_examples)]
-        templs = tmp.groupby('template')['input'].count().apply(
+        templs = tmp.groupby('abstract_template')['input'].count().apply(
             lambda x: (x / tmp.shape[0]) ** exp).reset_index()
         t = templs.sample(n=1, weights='input', axis=0)
-        e = domain_train_pull[domain_train_pull['template'] == t].sample(n=1)
+        e = domain_train_pull[domain_train_pull['abstract_template'] == t].sample(n=1)
         training_examples.append(e.index[0])
 
     sample = domain_train_pull.filter(items=training_examples, axis=0)
@@ -264,7 +283,7 @@ def sample_sets(training_size,
     save_cache(lev_cache)
     sample_df = pd.concat(sample, axis=0)
     dev_df = train_pull.sample(n=int(training_size*0.05//1)).assign(set_id=-1)
-    dev_df = validate_and_fix(dev_df, sample_df['template'], '', '', prog_col='template', debug=True)
+    dev_df = validate_and_fix(dev_df, sample_df['abstract_template'], '', '', prog_col='abstract_template', debug=True)
 
     # merge train and dev
     split_name = f"{set_size}_{training_size}_0_false"
@@ -351,8 +370,8 @@ def create_prog_split_skew_templates_freq_all_levels(train_pull,
     uniform_over_templs_top_level = train_pull.groupby(['template_kbfree_untyped_noops'])[
         'template_kbfree_untyped'].nunique()
     uniform_over_templs_mid_level = train_pull.groupby(['template_kbfree_untyped'])['template_kbfree'].nunique()
-    uniform_over_templs_mid2_level = train_pull.groupby(['template_kbfree'])['template'].nunique()
-    uniform_over_examples = train_pull['template'].value_counts(normalize=False)
+    uniform_over_templs_mid2_level = train_pull.groupby(['template_kbfree'])['abstract_template'].nunique()
+    uniform_over_examples = train_pull['abstract_template'].value_counts(normalize=False)
     top_level_temps_count = train_pull['template_kbfree_untyped_noops'].nunique()
 
     def q(x):
@@ -360,7 +379,7 @@ def create_prog_split_skew_templates_freq_all_levels(train_pull,
                (1 / uniform_over_templs_top_level[x['template_kbfree_untyped_noops']]) * \
                (1 / uniform_over_templs_mid_level[x['template_kbfree_untyped']]) * \
                (1 / uniform_over_templs_mid2_level[x['template_kbfree']]) * \
-               (1 / uniform_over_examples[x['template']])
+               (1 / uniform_over_examples[x['abstract_template']])
 
     weights = train_pull.apply(q, axis=1)
 
@@ -398,3 +417,79 @@ def create_prog_split_skew_templates_freq_all_levels(train_pull,
 
     return train_pull
 
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--compositional_test_path', type=str,
+                        help="absolute path to a csv with compositional test data",
+                        default="data/program_test.tsv")
+    parser.add_argument('--compositional_dev_path', type=str,
+                        help="absolute path to a csv with compositional validation data",
+                        default="data/program_dev.tsv")
+    parser.add_argument('--augmented_path', type=str, help="absolute path to a csv with question, query pairs",
+                        default="data/small_synthetic_data.tsv")
+    parser.add_argument('--question_col_index', type=int, default=1,
+                        help="index of the questions column in the input csv")
+    parser.add_argument('--query_col_index', type=int, default=2,
+                        help="index of the (ThingTalk) queries column in the input csv")
+    parser.add_argument('--training_size', type=int, default=20,
+                        help="training set size to sample")
+    parser.add_argument('--save_training_pull', dest='save_training_pull', action='store_true',
+                        help="if true, saves the training examples extracted from augmented_path in the same directory")
+    parser.add_argument('--create_training_pull', dest='create_training_pull', action='store_true',
+                        help="if true, uses the compositional evaluation files to clean the file in augmented_path")
+    parser.add_argument('--save_uat_samples', dest='save_uat_samples', action='store_true',
+                        help="if true, saves 5 UAT samples in the same directory as augmented_path. the output csv has "
+                             "the same columns as the input file, and additional 5 columns, each marks the examples in "
+                             "the sample")
+
+    args = parser.parse_args()
+
+    # read question, query pairs
+    augmented_data_df = pd.read_csv(args.augmented_path, sep='\t', header=None)
+    # convert each query to a template
+    augmented_data_df['abstract_template'] = augmented_data_df[args.query_col_index].apply(lambda x: convert_to_schemafree_template_untyped(str(x)))
+    augmented_data_df['abstract_template'] = augmented_data_df['abstract_template'].apply(
+        convert_to_schemafree_template_untyped)
+    # get the compositional development and test templates
+    # these templates shouldn't be seen by the model at training
+    compositional_data = pd.concat(
+        [
+            pd.read_csv( args.compositional_test_path, sep='\t', header=None),
+            pd.read_csv( args.compositional_dev_path, sep='\t', header=None)
+        ]
+    )
+    test_templs = compositional_data[5].unique()
+    if args.create_training_pull:
+        # remove <question, query, template> triplets where template \in test_templs
+        train_pull = augmented_data_df[~augmented_data_df['abstract_template'].isin(test_templs)]
+    else:
+        train_pull = augmented_data_df
+
+    if 7 in train_pull.columns:
+        train_pull = train_pull.rename(columns={7: 'template'})
+    if '7' in train_pull.columns:
+        train_pull = train_pull.rename(columns={'7': 'template'})
+
+    if args.save_training_pull:
+        if not args.create_training_pull:
+            print('WARNING: training pull is identical to the input data file')
+        train_pull.to_csv(
+            Path(args.augmented_path).parent / "em_preprocessed.tsv",
+            sep='\t',
+            index=False
+        )
+
+    # create UAT splits
+    if args.save_uat_samples:
+        train_pull = create_prog_split_skew_templates_freq(train_pull,
+                                              [-1],
+                                              [args.training_size],
+                                              validation_set_prop=0.20,
+                                              temp_col='abstract_template',
+                                              input_col=args.question_col_index,
+                                              prog_col=args.query_col_index,
+                                              num_splits=5,
+                                              save_space=False,
+                                              with_paraphrase=False)
+        train_pull.to_csv(Path(args.augmented_path).parent / "small_uat_splits.tsv", index=False, sep='\t')

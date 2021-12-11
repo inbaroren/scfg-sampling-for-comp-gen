@@ -1,0 +1,88 @@
+{
+    "dataset_reader": {
+        "type": "my_seq2seq_pd",
+        "end_symbol": "</s>",
+        "program_col": 2,
+        "source_add_end_token": false,
+        "source_add_start_token": false,
+        "source_token_indexers": {
+            "tokens": {
+                "type": "pretrained_transformer",
+                "model_name": "facebook/bart-base"
+            }
+        },
+        "source_tokenizer": {
+            "type": "pretrained_transformer",
+            "model_name": "facebook/bart-base"
+        },
+        "start_symbol": "<s>",
+        "target_add_end_token": false,
+        "target_add_start_token": false,
+        "utterance_col": 1
+    },
+    "model": {
+        "type": "my_bart",
+        "beam_size": 4,
+        "experiment_name": "baseline_seed_1",
+        "model_name": "facebook/bart-base"
+    },
+    "train_data_path": "data/program_train.tsv",
+    "validation_data_path": "data/iid_dev.tsv",
+    "trainer": {
+
+        "checkpointer": {
+            "num_serialized_models_to_keep": 1
+        },
+        "cuda_device": 0,
+
+        "learning_rate_scheduler": {
+            "type": "polynomial_decay",
+            "power": 1,
+            "warmup_steps": 1500
+        },
+        "num_epochs": 35,
+        "optimizer": {
+            "type": "huggingface_adamw",
+            "betas": [
+                0.9,
+                0.999
+            ],
+            "correct_bias": true,
+            "eps": 1e-08,
+            "lr": 3e-05
+        },
+        "patience": 10,
+        "tensorboard_writer": {
+            "should_log_learning_rate": true
+        },
+        "validation_metric": "+id_seq_acc"
+    },
+    "data_loader": {
+        "batch_size": 1,
+        "shuffle": true
+    },
+    "numpy_seed": 1023,
+    "pytorch_seed": 102,
+    "random_seed": 10235,
+    "validation_dataset_reader": {
+        "type": "my_seq2seq_pd",
+        "end_symbol": "</s>",
+        "program_col": 2,
+        "source_add_end_token": false,
+        "source_add_start_token": false,
+        "source_token_indexers": {
+            "tokens": {
+                "type": "pretrained_transformer",
+                "model_name": "facebook/bart-base"
+            }
+        },
+        "source_tokenizer": {
+            "type": "pretrained_transformer",
+            "model_name": "facebook/bart-base"
+        },
+        "start_symbol": "<s>",
+        "target_add_end_token": false,
+        "target_add_start_token": false,
+        "utterance_col": 1
+    }
+}
