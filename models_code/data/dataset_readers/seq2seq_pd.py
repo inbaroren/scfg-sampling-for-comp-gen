@@ -24,6 +24,8 @@ logger = logging.getLogger(__name__)
 @DatasetReader.register("my_seq2seq_pd")
 class Seq2SeqPdDatasetReader(DatasetReader):
     """
+    Reads examples from a tsv file using pandas
+
     # Parameters
 
     source_tokenizer : `Tokenizer`, optional
@@ -47,13 +49,16 @@ class Seq2SeqPdDatasetReader(DatasetReader):
     quoting : `int`, (optional, default=`csv.QUOTE_MINIMAL`)
         Quoting to use for csv reader.
     debug: if True, only 100 lines are loaded
-    utterance_col: name of the column with the utterances (input)
-    program_col: name of the column with the programs (output)
+    example_id_col: name of the column with the examples id (optional, default=0)
+    utterance_col: name of the column with the utterances (input) (optional, default=1)
+    program_col: name of the column with the programs (output) (optional, default=2)
     condition_name: if the training file has data for several experiments, this is the name of the current experiment.
         when reading a file, it is expected to have a column <condition_name>, where 1 denotes training examples
-        and 2 validation examples.
-    condition_val: used to differentiate between training and test examples.
-    read_header: None or "infer"
+        and 2 validation examples. (optional, default=None)
+    condition_val: used to differentiate between training and test examples by conditioning `condition_name` to be
+        equal to `condition_val` (optional, default=None)
+    read_header: None or "infer". if None, the header is ignored, so utterance_col, program_col and condition_name must
+        be numbers. (optional, default=None)
     """
 
     def __init__(

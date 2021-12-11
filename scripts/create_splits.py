@@ -9,10 +9,14 @@ from tqdm import tqdm
 import pickle
 import argparse
 
+import logging
 import sys
 import os
 sys.path.insert(0, os.path.dirname(__file__))
 from utils import *
+
+
+logger = logging.getLogger(__file__)
 
 
 def creat_split_baseline(cs_df,
@@ -482,4 +486,4 @@ if __name__ == '__main__':
                                               num_splits=5,
                                               save_space=False,
                                               with_paraphrase=False)
-        train_pull.to_csv(Path(args.augmented_path).parent / "uat_splits.csv", index=False)
+        train_pull.to_csv(Path(args.augmented_path).parent / "small_uat_splits.tsv", index=False, sep='\t')
