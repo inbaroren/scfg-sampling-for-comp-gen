@@ -9,19 +9,20 @@ The generated data will be in the "augmented.tsv" file.
 ## Sample UAT training sets w.r.t a compositional evaluation set
 To sample training sets from your generated synthetic data w.r.t a compositional evaluation set, use ```scripts/create_splits.py```.
 The script performs 2 main operations: 
-1. Clean examples that overlap with the compositional evaluation set in terms of templates 
-2. Sample with UAT 
+1. Remove examples with templates that appear in the compositional evaluation set
+2. Sample with UAT
 
 The synthetic data, evaluation development and test sets are passed as paths.
-Use python scripts/create_splits.py -h for more details. 
+Use  ```python scripts/create_splits.py -h  ``` for more details. 
  For example, to create UAT samples w.r.t the evaluation data in the data directory (program_dev.tsv and program_test.tsv), run:
  ```
 python scripts/create_splits.py --augmented_path <path to your augmented.tsv file>   --training_size <choose training size for each sample>  --save_uat_samples
 ```  
 
-When using the save_uat_samples flag the output file will contain the file in augmented_path but with additional 5 columns, each represents a sample. For example, the column "-1_1000_0_false" represents the first sample of size 1K, and has the value 1 for each example in the sample's training set, and 2 for each example in the sample's validation set.  
-Possible error: during the splitting process validation examples that contain schema properties or constants that do not appear in the training set are removed. It is possible that when the training size is small this would cause the validation set to be empty.
+When using the save_uat_samples flag the output file will contain the file in augmented_path but with additional 5 columns, each represents a sample. 
+For example, the column "-1_1000_0_false" represents the first sample of size 1K, and has the value 1 for each example in the sample's training set, and 2 for each example in the sample's validation set.  
 
+Validation set is empty error: during the splitting process validation examples that contain schema properties or constants that do not appear in the training set are removed. It is possible that when the training size is small this would cause the validation set to be empty.
 
 ## Train a model
 We use allennlp BART implementation as the parser and use the allennlp framework to train it. 
