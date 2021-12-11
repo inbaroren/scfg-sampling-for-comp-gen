@@ -16,13 +16,19 @@ The synthetic data, evaluation development and test sets are passed as paths.
 Use  ```python scripts/create_splits.py -h  ``` for more details. 
  For example, to create UAT samples w.r.t the evaluation data in the data directory (program_dev.tsv and program_test.tsv), run:
  ```
-python scripts/create_splits.py --augmented_path <path to your augmented.tsv file>   --training_size <choose training size for each sample>  --save_uat_samples
+python scripts/create_splits.py --augmented_path <path to your augmented.tsv file>   --training_size <choose training size for each sample>  --create_training_pull --save_uat_samples
 ```  
 
 When using the save_uat_samples flag the output file will contain the file in augmented_path but with additional 5 columns, each represents a sample. 
 For example, the column "-1_1000_0_false" represents the first sample of size 1K, and has the value 1 for each example in the sample's training set, and 2 for each example in the sample's validation set.  
 
 Validation set is empty error: during the splitting process validation examples that contain schema properties or constants that do not appear in the training set are removed. It is possible that when the training size is small this would cause the validation set to be empty.
+
+To run a test example using the file ```data/small_synthetic_data.tsv```:
+```
+python scripts/create_splits.py --save_uat_samples
+```  
+
 
 ## Train a model
 We use allennlp BART implementation as the parser and use the allennlp framework to train it. 
@@ -32,7 +38,7 @@ allennlp train experiments/bart-synthetic-data.json -s experiments/test_experime
 ```
 You can use it to train on your data by using the overrides parameter, or edit ```experiments/bart-synthetic-data.json```. For example, the following command specifies which sample to use for training:
 ```
-allennlp train experiments/bart-synthetic-data.json -s experiments/test_experiment --include-package models_code --overrides '{"dataset_reader":{"condition_name":"1_20_0_false"}}'
+allennlp train experiments/bart-synthetic-data.json -s experiments/test_experiment --include-package models_code --overrides '{"dataset_reader":{"condition_name":"-1_20_0_false"}}'
 ```
 
 #### Train the baseline parsers

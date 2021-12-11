@@ -198,10 +198,10 @@ def create_prog_split_skew_templates_freq_double_phase(domain_train_pull,
 
     while len(training_examples) < training_size:
         tmp = domain_train_pull[~domain_train_pull.index.isin(training_examples)]
-        templs = tmp.groupby('template')['input'].count().apply(
+        templs = tmp.groupby('abstract_template')['input'].count().apply(
             lambda x: (x / tmp.shape[0]) ** exp).reset_index()
         t = templs.sample(n=1, weights='input', axis=0)
-        e = domain_train_pull[domain_train_pull['template'] == t].sample(n=1)
+        e = domain_train_pull[domain_train_pull['abstract_template'] == t].sample(n=1)
         training_examples.append(e.index[0])
 
     sample = domain_train_pull.filter(items=training_examples, axis=0)
@@ -283,7 +283,7 @@ def sample_sets(training_size,
     save_cache(lev_cache)
     sample_df = pd.concat(sample, axis=0)
     dev_df = train_pull.sample(n=int(training_size*0.05//1)).assign(set_id=-1)
-    dev_df = validate_and_fix(dev_df, sample_df['template'], '', '', prog_col='template', debug=True)
+    dev_df = validate_and_fix(dev_df, sample_df['abstract_template'], '', '', prog_col='abstract_template', debug=True)
 
     # merge train and dev
     split_name = f"{set_size}_{training_size}_0_false"
@@ -370,8 +370,8 @@ def create_prog_split_skew_templates_freq_all_levels(train_pull,
     uniform_over_templs_top_level = train_pull.groupby(['template_kbfree_untyped_noops'])[
         'template_kbfree_untyped'].nunique()
     uniform_over_templs_mid_level = train_pull.groupby(['template_kbfree_untyped'])['template_kbfree'].nunique()
-    uniform_over_templs_mid2_level = train_pull.groupby(['template_kbfree'])['template'].nunique()
-    uniform_over_examples = train_pull['template'].value_counts(normalize=False)
+    uniform_over_templs_mid2_level = train_pull.groupby(['template_kbfree'])['abstract_template'].nunique()
+    uniform_over_examples = train_pull['abstract_template'].value_counts(normalize=False)
     top_level_temps_count = train_pull['template_kbfree_untyped_noops'].nunique()
 
     def q(x):
@@ -379,7 +379,7 @@ def create_prog_split_skew_templates_freq_all_levels(train_pull,
                (1 / uniform_over_templs_top_level[x['template_kbfree_untyped_noops']]) * \
                (1 / uniform_over_templs_mid_level[x['template_kbfree_untyped']]) * \
                (1 / uniform_over_templs_mid2_level[x['template_kbfree']]) * \
-               (1 / uniform_over_examples[x['template']])
+               (1 / uniform_over_examples[x['abstract_template']])
 
     weights = train_pull.apply(q, axis=1)
 
@@ -448,8 +448,8 @@ if __name__ == '__main__':
     # read question, query pairs
     augmented_data_df = pd.read_csv(args.augmented_path, sep='\t', header=None)
     # convert each query to a template
-    augmented_data_df['template'] = augmented_data_df[args.query_col_index].apply(lambda x: convert_to_schemafree_template_untyped(str(x)))
-    augmented_data_df['template'] = augmented_data_df['template'].apply(
+    augmented_data_df['abstract_template'] = augmented_data_df[args.query_col_index].apply(lambda x: convert_to_schemafree_template_untyped(str(x)))
+    augmented_data_df['abstract_template'] = augmented_data_df['abstract_template'].apply(
         convert_to_schemafree_template_untyped)
     # get the compositional development and test templates
     # these templates shouldn't be seen by the model at training
@@ -462,14 +462,20 @@ if __name__ == '__main__':
     test_templs = compositional_data[5].unique()
     if args.create_training_pull:
         # remove <question, query, template> triplets where template \in test_templs
-        train_pull = augmented_data_df[~augmented_data_df['template'].isin(test_templs)]
+        train_pull = augmented_data_df[~augmented_data_df['abstract_template'].isin(test_templs)]
     else:
         train_pull = augmented_data_df
+
+    if 7 in train_pull.columns:
+        train_pull = train_pull.rename(columns={7: 'template'})
+    if '7' in train_pull.columns:
+        train_pull = train_pull.rename(columns={'7': 'template'})
+
     if args.save_training_pull:
         if not args.create_training_pull:
             print('WARNING: training pull is identical to the input data file')
         train_pull.to_csv(
-            Path(args.augmented_path).parent / "training_pull.tsv",
+            Path(args.augmented_path).parent / "em_preprocessed.tsv",
             sep='\t',
             index=False
         )
@@ -480,7 +486,7 @@ if __name__ == '__main__':
                                               [-1],
                                               [args.training_size],
                                               validation_set_prop=0.20,
-                                              temp_col='template',
+                                              temp_col='abstract_template',
                                               input_col=args.question_col_index,
                                               prog_col=args.query_col_index,
                                               num_splits=5,
