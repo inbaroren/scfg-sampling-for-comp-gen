@@ -1,2 +1,1 @@
 from models_code.training.metrics.boolean_accuracy import MyBooleanAccuracy
-from models_code.training.metrics.token_seq_accuracy import TokenSequenceAccuracy
