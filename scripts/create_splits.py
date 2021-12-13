@@ -450,7 +450,7 @@ if __name__ == '__main__':
     # convert each query to a template
     augmented_data_df['abstract_template'] = augmented_data_df[args.query_col_index].apply(lambda x: convert_to_schemafree_template_untyped(str(x)))
     augmented_data_df['abstract_template'] = augmented_data_df['abstract_template'].apply(
-        convert_to_schemafree_template_untyped)
+        convert_to_schemafree_template_untyped_noops)
     # get the compositional development and test templates
     # these templates shouldn't be seen by the model at training
     compositional_data = pd.concat(
