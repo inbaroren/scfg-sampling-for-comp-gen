@@ -16,7 +16,7 @@ The synthetic data, evaluation development and test sets are passed as paths.
 Use  ```python scripts/create_splits.py -h  ``` for more details. 
  For example, to create UAT samples w.r.t the evaluation data in the data directory (program_dev.tsv and program_test.tsv), run:
  ```
-python scripts/create_splits.py --augmented_path <path to your augmented.tsv file>   --training_size <choose training size for each sample>  --create_training_pull --save_uat_samples
+python scripts/create_splits.py --augmented_path <path to your augmented.tsv file>   --training_size <choose training size for each sample>  --create_training_pool --save_uat_samples
 ```  
 
 When using the save_uat_samples flag the output file will contain the file in augmented_path but with additional 5 columns, each represents a sample. 
@@ -29,6 +29,8 @@ To run a test example using the file ```data/small_synthetic_data.tsv```:
 python scripts/create_splits.py --save_uat_samples
 ```  
 
+When the create_training_pool flag is on the input data is reduced by removing any example with abstract template from the compositional evaluation set (data/program_*.tsv).
+To save the result use the save_training_pool flag. 
 
 ## Train a model
 We use allennlp BART implementation as the parser and use the allennlp framework to train it. 
