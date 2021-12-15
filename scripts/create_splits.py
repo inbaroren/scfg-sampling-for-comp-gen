@@ -110,7 +110,7 @@ def create_synth_splits_random_onefile(trainsize_list,
     return synth_train_df
 
 
-def create_prog_split_skew_templates_freq(train_pull,
+def create_prog_split_skew_templates_freq(train_data_df,
                                           exp_list,
                                           training_size_list,
                                           validation_set_prop=0.05,
@@ -122,7 +122,7 @@ def create_prog_split_skew_templates_freq(train_pull,
                                           with_paraphrase: bool = False):
     """
     UAT sampling
-    train_pull: pd.DataFrame, pull of examples to sample from
+    train_data_df: pd.DataFrame, pull of examples to sample from
     exp_list: float in [-1, 0]. the exponent (alpha) to use to skew the template distribution before sampling. -1 is closest to uniform, 0 is random
     training_size_list: List[int], list of sample sizes to sample
     validation_set_prop: float, proportion of the validation set
@@ -134,10 +134,10 @@ def create_prog_split_skew_templates_freq(train_pull,
     with_paraphrase: boolean, indicates whether the input data includes paraphrased questions
     """
     # calculate frequncy of templates p(T=t), attach to all examples
-    N = train_pull.shape[0]
-    freq = train_pull[temp_col].value_counts(normalize=True).reset_index().rename(
+    N = train_data_df.shape[0]
+    freq = train_data_df[temp_col].value_counts(normalize=True).reset_index().rename(
         columns={temp_col: 'freq', 'index': temp_col})
-    train_pull = train_pull.merge(freq, on=temp_col, how='left')
+    train_data_df = train_data_df.merge(freq, on=temp_col, how='left')
 
     # sample training sets by skewing p(T=t)
     for training_size in training_size_list:
@@ -145,9 +145,9 @@ def create_prog_split_skew_templates_freq(train_pull,
             for i in range(num_splits):
                 split_name = f"{exp}_{training_size}_{i}_{with_paraphrase}".lower()
                 # fix prob distribution
-                weights = train_pull['freq'].apply(lambda x: x ** exp)
+                weights = train_data_df['freq'].apply(lambda x: x ** exp)
                 # sample
-                sample = train_pull.sample(n=training_size, weights=weights)
+                sample = train_data_df.sample(n=training_size, weights=weights)
                 tmp_train, tmp_dev = train_test_split(sample, test_size=validation_set_prop)
                 # validate
                 tmp_dev = validate_and_fix(tmp_dev, tmp_train[prog_col],
@@ -157,15 +157,15 @@ def create_prog_split_skew_templates_freq(train_pull,
                 tmp_train = tmp_train.assign(**{split_name: 1})
                 tmp_dev = tmp_dev.assign(**{split_name: 2})
                 tmp = pd.concat([tmp_train, tmp_dev], axis=0)
-                train_pull = train_pull.merge(tmp[[split_name]], left_index=True, right_index=True, how='left')
+                train_data_df = train_data_df.merge(tmp[[split_name]], left_index=True, right_index=True, how='left')
 
                 try:
-                    assert len(train_pull[split_name].value_counts()) == 2, "there are no examples in dev, try to increase the training size"
-                    assert train_pull[split_name].value_counts()[1] == tmp_train.shape[0]
-                    assert train_pull[split_name].value_counts()[2] == tmp_dev.shape[0]
-                    assert train_pull.shape[0] == N
+                    assert len(train_data_df[split_name].value_counts()) == 2, "there are no examples in dev, try to increase the training size"
+                    assert train_data_df[split_name].value_counts()[1] == tmp_train.shape[0]
+                    assert train_data_df[split_name].value_counts()[2] == tmp_dev.shape[0]
+                    assert train_data_df.shape[0] == N
                 except KeyError:
-                    print("there are no examples in dev, try to increase the training size\n", train_pull[split_name].value_counts())
+                    print("there are no examples in dev, try to increase the training size\n", train_data_df[split_name].value_counts())
 
     def is_chosen(x):
         for s in training_size_list:
@@ -177,17 +177,17 @@ def create_prog_split_skew_templates_freq(train_pull,
         return False
 
     if save_space:
-        train_pull = train_pull[train_pull.apply(is_chosen, axis=1)]
+        train_data_df = train_data_df[train_data_df.apply(is_chosen, axis=1)]
 
-    return train_pull
+    return train_data_df
 
 
-def create_prog_split_skew_templates_freq_double_phase(domain_train_pull,
+def create_prog_split_skew_templates_freq_double_phase(domain_train_data_df,
                                                        validation_set_prop=0.05,
                                                        training_size=60000,
                                                        exp=0):
     """
-    domain_train_pull - dataframe with the data for training
+    domain_train_data_df - dataframe with the data for training
     validation_set_prop - proportion of dev set from each training size
     training_size - number of training examples for each experiment
     exp - at each step a template t is sampled with prob p(T=t)**exp, then an example e with template t is sampled uniformly
@@ -197,14 +197,14 @@ def create_prog_split_skew_templates_freq_double_phase(domain_train_pull,
     training_examples = []
 
     while len(training_examples) < training_size:
-        tmp = domain_train_pull[~domain_train_pull.index.isin(training_examples)]
+        tmp = domain_train_data_df[~domain_train_data_df.index.isin(training_examples)]
         templs = tmp.groupby('abstract_template')['input'].count().apply(
             lambda x: (x / tmp.shape[0]) ** exp).reset_index()
         t = templs.sample(n=1, weights='input', axis=0)
-        e = domain_train_pull[domain_train_pull['abstract_template'] == t].sample(n=1)
+        e = domain_train_data_df[domain_train_data_df['abstract_template'] == t].sample(n=1)
         training_examples.append(e.index[0])
 
-    sample = domain_train_pull.filter(items=training_examples, axis=0)
+    sample = domain_train_data_df.filter(items=training_examples, axis=0)
 
     train_list, dev_list = train_test_split(sample, test_size=validation_set_prop)
     # TODO: save
@@ -212,7 +212,7 @@ def create_prog_split_skew_templates_freq_double_phase(domain_train_pull,
 
 def sample_sets(training_size,
                 set_size,
-                train_pull,
+                train_data_df,
                 exmp_id_col,
                 weights_temp_col,
                 lev_temp_col,
@@ -230,11 +230,11 @@ def sample_sets(training_size,
     cache_path = Path(cache_base_path) / f"/thingtalk/synth_baseline/{domain}_template_lev_distance.pkl"
 
     # calculate inverse frequncy of templates p(T=t)^-1, attach to all examples
-    if not 'weights' in train_pull.columns:
-        weights = train_pull[weights_temp_col].value_counts(normalize=True).apply(
+    if not 'weights' in train_data_df.columns:
+        weights = train_data_df[weights_temp_col].value_counts(normalize=True).apply(
             lambda x: x ** (-1)).reset_index().rename(
             columns={weights_temp_col: 'weights', 'index': weights_temp_col})
-        train_pull = train_pull.merge(weights, on=weights_temp_col, how='left')
+        train_data_df = train_data_df.merge(weights, on=weights_temp_col, how='left')
 
     # template1 to <template2 : lev distance> dict
     def load_cache():
@@ -246,7 +246,7 @@ def sample_sets(training_size,
             return init_cache()
 
     def init_cache():
-        temp_to_id = {temp: i for i, temp in enumerate(train_pull[lev_temp_col].unique())}
+        temp_to_id = {temp: i for i, temp in enumerate(train_data_df[lev_temp_col].unique())}
         tempid_to_temp = {v: k for k, v in temp_to_id.items()}
         tempid_to_lev = {tempid: defaultdict() for tempid in tempid_to_temp.keys()}
         return {'temp_to_id': temp_to_id,
@@ -261,18 +261,18 @@ def sample_sets(training_size,
 
     sample = []
     sets = int(training_size*0.95//1//(set_size+1))
-    train_pull = train_pull.sample(frac=1.0)
+    train_data_df = train_data_df.sample(frac=1.0)
     for set_id in tqdm(range(sets)):
-        example = train_pull.sample(n=1, weights='weights').iloc[0]
-        train_pull = train_pull[~(train_pull[exmp_id_col] == example[exmp_id_col])]
+        example = train_data_df.sample(n=1, weights='weights').iloc[0]
+        train_data_df = train_data_df[~(train_data_df[exmp_id_col] == example[exmp_id_col])]
 
-        train_pull, neighborhood, lev_cache = \
-            expand_neighberhood(lev_cache=lev_cache, train_pull=train_pull, example=example,
+        train_data_df, neighborhood, lev_cache = \
+            expand_neighberhood(lev_cache=lev_cache, train_data_df=train_data_df, example=example,
                                 exmp_id_col=exmp_id_col, lev_temp_col=lev_temp_col,
                                 set_size=set_size, domain=domain)
         assert neighborhood.shape[0] == neighborhood[
             exmp_id_col].nunique(), f"set duplications! {example[exmp_id_col]}, set: {neighborhood[exmp_id_col].unique()}, set_id: {set_id}"
-        assert train_pull.shape[0] == train_pull[exmp_id_col].nunique(), f"duplications in train! "
+        assert train_data_df.shape[0] == train_data_df[exmp_id_col].nunique(), f"duplications in train! "
         assert neighborhood.shape[
                    0] <= set_size + 1, f"set too big! {example[exmp_id_col]}, set: {neighborhood[exmp_id_col].unique()}, set_id: {set_id}"
 
@@ -282,7 +282,7 @@ def sample_sets(training_size,
 
     save_cache(lev_cache)
     sample_df = pd.concat(sample, axis=0)
-    dev_df = train_pull.sample(n=int(training_size*0.05//1)).assign(set_id=-1)
+    dev_df = train_data_df.sample(n=int(training_size * 0.05 // 1)).assign(set_id=-1)
     dev_df = validate_and_fix(dev_df, sample_df['abstract_template'], '', '', prog_col='abstract_template', debug=True)
 
     # merge train and dev
@@ -293,7 +293,7 @@ def sample_sets(training_size,
     return pd.concat([sample_df, dev_df], axis=0)
 
 
-def expand_neighberhood(lev_cache, train_pull, example, exmp_id_col,
+def expand_neighberhood(lev_cache, train_data_df, example, exmp_id_col,
                         lev_temp_col, set_size, allow_zero=False, domain='test'):
     """
     uses lev_cache to sample the nearest neighbors of example in train_pull.
@@ -340,18 +340,18 @@ def expand_neighberhood(lev_cache, train_pull, example, exmp_id_col,
     while neighborhood_size < set_size:
         neighborhood = heapq.nsmallest(set_size+slack, lev_cache['tempid_to_lev'][target_tempid].items(), key=lambda x: x[1])
         neighborhood_temps = [lev_cache['tempid_to_temp'][n[0]] for n in neighborhood]
-        neighborhood_size = train_pull[train_pull[lev_temp_col].isin(neighborhood_temps)].shape[0]
+        neighborhood_size = train_data_df[train_data_df[lev_temp_col].isin(neighborhood_temps)].shape[0]
         slack += 1
 
-    neighborhood_df = train_pull[train_pull[lev_temp_col].isin(neighborhood_temps)].sample(n=set_size)
+    neighborhood_df = train_data_df[train_data_df[lev_temp_col].isin(neighborhood_temps)].sample(n=set_size)
 
     # update the train_pull
-    train_pull = train_pull[~(train_pull[exmp_id_col].isin(neighborhood_df[exmp_id_col].unique()))]
+    train_data_df = train_data_df[~(train_data_df[exmp_id_col].isin(neighborhood_df[exmp_id_col].unique()))]
 
-    return train_pull, neighborhood_df.append(example, ignore_index=True), lev_cache
+    return train_data_df, neighborhood_df.append(example, ignore_index=True), lev_cache
 
 
-def create_prog_split_skew_templates_freq_all_levels(train_pull,
+def create_prog_split_skew_templates_freq_all_levels(train_data_df,
                                                      training_size_list,
                                                      with_para: bool = False,
                                                      validation_set_prop=0.05,
@@ -366,13 +366,13 @@ def create_prog_split_skew_templates_freq_all_levels(train_pull,
     """
     # fix p(x)
     # calculate the weight of each example as joint probablity of all its tempaltes, where p_l(t=T) is uniform
-    N = train_pull.shape[0]
-    uniform_over_templs_top_level = train_pull.groupby(['template_kbfree_untyped_noops'])[
+    N = train_data_df.shape[0]
+    uniform_over_templs_top_level = train_data_df.groupby(['template_kbfree_untyped_noops'])[
         'template_kbfree_untyped'].nunique()
-    uniform_over_templs_mid_level = train_pull.groupby(['template_kbfree_untyped'])['template_kbfree'].nunique()
-    uniform_over_templs_mid2_level = train_pull.groupby(['template_kbfree'])['abstract_template'].nunique()
-    uniform_over_examples = train_pull['abstract_template'].value_counts(normalize=False)
-    top_level_temps_count = train_pull['template_kbfree_untyped_noops'].nunique()
+    uniform_over_templs_mid_level = train_data_df.groupby(['template_kbfree_untyped'])['template_kbfree'].nunique()
+    uniform_over_templs_mid2_level = train_data_df.groupby(['template_kbfree'])['abstract_template'].nunique()
+    uniform_over_examples = train_data_df['abstract_template'].value_counts(normalize=False)
+    top_level_temps_count = train_data_df['template_kbfree_untyped_noops'].nunique()
 
     def q(x):
         return (1 / top_level_temps_count) * \
@@ -381,14 +381,14 @@ def create_prog_split_skew_templates_freq_all_levels(train_pull,
                (1 / uniform_over_templs_mid2_level[x['template_kbfree']]) * \
                (1 / uniform_over_examples[x['abstract_template']])
 
-    weights = train_pull.apply(q, axis=1)
+    weights = train_data_df.apply(q, axis=1)
 
     # sample training sets by skewing p(T=t)
     for training_size in training_size_list:
         for i in range(num_splits):
             split_name = f"-2_{training_size}_{i}_{with_para}"
             # sample
-            sample = train_pull.sample(n=training_size, weights=weights)
+            sample = train_data_df.sample(n=training_size, weights=weights)
             tmp_train, tmp_dev = train_test_split(sample, test_size=validation_set_prop)
             # validate
             tmp_dev = validate_and_fix(tmp_dev, tmp_train[prog_col],
@@ -398,11 +398,11 @@ def create_prog_split_skew_templates_freq_all_levels(train_pull,
             tmp_train = tmp_train.assign(**{split_name: 1})
             tmp_dev = tmp_dev.assign(**{split_name: 2})
             tmp = pd.concat([tmp_train, tmp_dev], axis=0)
-            train_pull = train_pull.merge(tmp[[split_name]], left_index=True, right_index=True, how='left')
+            train_data_df = train_data_df.merge(tmp[[split_name]], left_index=True, right_index=True, how='left')
 
-            assert train_pull[split_name].value_counts()[1] == tmp_train.shape[0]
-            assert train_pull[split_name].value_counts()[2] == tmp_dev.shape[0]
-            assert train_pull.shape[0] == N
+            assert train_data_df[split_name].value_counts()[1] == tmp_train.shape[0]
+            assert train_data_df[split_name].value_counts()[2] == tmp_dev.shape[0]
+            assert train_data_df.shape[0] == N
 
     def is_chosen(x):
         for s in training_size_list:
@@ -413,9 +413,9 @@ def create_prog_split_skew_templates_freq_all_levels(train_pull,
         return False
 
     if save_space:
-        train_pull = train_pull[train_pull.apply(is_chosen, axis=1)]
+        train_data_df = train_data_df[train_data_df.apply(is_chosen, axis=1)]
 
-    return train_pull
+    return train_data_df
 
 
 if __name__ == '__main__':
@@ -434,9 +434,9 @@ if __name__ == '__main__':
                         help="index of the (ThingTalk) queries column in the input csv")
     parser.add_argument('--training_size', type=int, default=20,
                         help="training set size to sample")
-    parser.add_argument('--save_training_pull', dest='save_training_pull', action='store_true',
+    parser.add_argument('--save_training_pool', dest='save_training_pool', action='store_true',
                         help="if true, saves the training examples extracted from augmented_path in the same directory")
-    parser.add_argument('--create_training_pull', dest='create_training_pull', action='store_true',
+    parser.add_argument('--create_training_pool', dest='create_training_pool', action='store_true',
                         help="if true, uses the compositional evaluation files to clean the file in augmented_path")
     parser.add_argument('--save_uat_samples', dest='save_uat_samples', action='store_true',
                         help="if true, saves 5 UAT samples in the same directory as augmented_path. the output csv has "
@@ -460,21 +460,19 @@ if __name__ == '__main__':
         ]
     )
     test_templs = compositional_data[5].unique()
-    if args.create_training_pull:
+    if args.create_training_pool:
         # remove <question, query, template> triplets where template \in test_templs
-        train_pull = augmented_data_df[~augmented_data_df['abstract_template'].isin(test_templs)]
+        train_pool_data_df = augmented_data_df[~augmented_data_df['abstract_template'].isin(test_templs)]
     else:
-        train_pull = augmented_data_df
+        train_pool_data_df = augmented_data_df
 
-    if 7 in train_pull.columns:
-        train_pull = train_pull.rename(columns={7: 'template'})
-    if '7' in train_pull.columns:
-        train_pull = train_pull.rename(columns={'7': 'template'})
+    train_pool_data_df['template'] = train_pool_data_df[args.query_col_index].apply(
+        lambda x: convert_to_template(str(x)))
 
-    if args.save_training_pull:
-        if not args.create_training_pull:
+    if args.save_training_pool:
+        if not args.create_training_pool:
             print('WARNING: training pull is identical to the input data file')
-        train_pull.to_csv(
+        train_pool_data_df.to_csv(
             Path(args.augmented_path).parent / "em_preprocessed.tsv",
             sep='\t',
             index=False
@@ -482,14 +480,14 @@ if __name__ == '__main__':
 
     # create UAT splits
     if args.save_uat_samples:
-        train_pull = create_prog_split_skew_templates_freq(train_pull,
-                                              [-1],
-                                              [args.training_size],
-                                              validation_set_prop=0.20,
-                                              temp_col='abstract_template',
-                                              input_col=args.question_col_index,
-                                              prog_col=args.query_col_index,
-                                              num_splits=5,
-                                              save_space=False,
-                                              with_paraphrase=False)
-        train_pull.to_csv(Path(args.augmented_path).parent / "small_uat_splits.tsv", index=False, sep='\t')
+        train_pool_data_df = create_prog_split_skew_templates_freq(train_pool_data_df,
+                                                                   [-1],
+                                                                   [args.training_size],
+                                                                   validation_set_prop=0.20,
+                                                                   temp_col='abstract_template',
+                                                                   input_col=args.question_col_index,
+                                                                   prog_col=args.query_col_index,
+                                                                   num_splits=5,
+                                                                   save_space=False,
+                                                                   with_paraphrase=False)
+        train_pool_data_df.to_csv(Path(args.augmented_path).parent / "small_uat_splits.tsv", index=False, sep='\t')
